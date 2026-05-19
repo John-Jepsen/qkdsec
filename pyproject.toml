@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "qkdsec"
-version = "0.1.0"
-description = "A developer toolkit for Quantum Key Distribution: numerical security proofs, BB84 simulation, and ETSI GS QKD 014 client"
+version = "0.2.0"
+description = "A developer toolkit for Quantum Key Distribution: numerical security proofs, BB84 simulation, and a full ETSI GS QKD 014 client with built-in conformance probe"
 readme = "README.md"
 requires-python = ">=3.10"
 license = "Apache-2.0"
@@ -42,23 +42,52 @@ sim = [
     "qiskit>=2.0",
     "qiskit-aer>=0.17",
 ]
+async = [
+    "httpx>=0.27",
+]
+cli = [
+    "typer>=0.12",
+    "rich>=13",
+]
+doctor = [
+    "httpx>=0.27",
+    "typer>=0.12",
+    "rich>=13",
+]
+docs = [
+    "sphinx>=7",
+    "furo>=2024.5",
+    "myst-parser>=3",
+    "sphinx-autodoc-typehints>=2",
+    "sphinx-copybutton>=0.5",
+]
 all = [
     "cvxpy>=1.5",
     "numpy>=1.24",
     "scipy>=1.10",
     "qiskit>=2.0",
     "qiskit-aer>=0.17",
+    "httpx>=0.27",
+    "typer>=0.12",
+    "rich>=13",
 ]
 test = [
     "pytest>=7",
+    "pytest-asyncio>=0.23",
     "responses>=0.24",
+    "respx>=0.21",
 ]
 dev = [
     "pytest>=7",
+    "pytest-asyncio>=0.23",
     "responses>=0.24",
+    "respx>=0.21",
     "build>=1.0",
     "twine>=5.0",
 ]
+
+[project.scripts]
+qkdsec = "qkdsec._cli:app"
 
 [project.urls]
 Homepage = "https://github.com/John-Jepsen/qkdsec"
@@ -71,3 +100,4 @@ include = ["qkdsec*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+asyncio_mode = "auto"

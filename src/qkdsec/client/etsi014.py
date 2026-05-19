@@ -1,11 +1,12 @@
 """Synchronous ETSI GS QKD 014 client.
 
-The ETSI 014 REST API defines three endpoints for KME ↔ SAE interaction:
-
-    GET  /api/v1/keys/{slave_SAE_ID}/status
-    GET  /api/v1/keys/{slave_SAE_ID}/enc_keys?number=N&size=S
-    POST /api/v1/keys/{slave_SAE_ID}/enc_keys   {"number": N, "size": S}
-    POST /api/v1/keys/{slave_SAE_ID}/dec_keys   {"key_IDs": [{"key_ID": "..."}]}
+Full coverage of ETSI GS QKD 014 v1.1.1, including:
+    - All three endpoints (status, enc_keys, dec_keys)
+    - GET and POST request methods for enc_keys
+    - Multicast key delivery (``additional_slave_SAE_IDs``)
+    - Mandatory and optional vendor extensions on request and response
+    - Container-level extensions (``key_container_extension``,
+      ``status_extension``, etc.)
 
 Typical flow (point-to-point, master = Alice, slave = Bob):
 
@@ -15,15 +16,16 @@ Typical flow (point-to-point, master = Alice, slave = Bob):
     3. Bob's app calls ``get_dec_keys`` against Bob's KME with the same
        key_id — receives the matching key bytes.
 
-Both KMEs hold the same key material (synchronized via the quantum channel).
+For multicast (one-to-many) delivery, pass ``additional_slave_SAE_IDs=[...]``
+to ``get_enc_keys``; the same key is then retrievable by each listed SAE.
 """
 
 import base64
-from typing import Optional, Union
+from typing import Any, Optional, Union
 
 import requests
 
-from ._types import KeyResponse, StatusResponse
+from ._types import KeyResponse, KeysContainer, StatusResponse
 from .errors import KMEHTTPError, KMENotFoundError
 
 _API_PREFIX = "/api/v1/keys"
@@ -74,13 +76,15 @@ class ETSI014Client:
         self.extra_headers = dict(extra_headers or {})
         self._session = session or requests.Session()
 
-    # ── Public API ─────────────────────────────────────────────────────────
+    # ── Status ─────────────────────────────────────────────────────────────
 
     def status(self, slave_sae_id: str) -> StatusResponse:
         """Fetch KME status for the given slave SAE (ETSI 014 §5.2)."""
         url = f"{self.base_url}{_API_PREFIX}/{slave_sae_id}/status"
         data = self._get_json(url)
         return self._parse_status(data)
+
+    # ── enc_keys (master SAE) ──────────────────────────────────────────────
 
     def get_enc_keys(
         self,
@@ -89,43 +93,150 @@ class ETSI014Client:
         number: int = 1,
         size: int = 256,
         method: str = "GET",
+        additional_slave_sae_ids: Optional[list[str]] = None,
+        extension_mandatory: Optional[list[dict[str, Any]]] = None,
+        extension_optional: Optional[list[dict[str, Any]]] = None,
     ) -> list[KeyResponse]:
         """Fetch encryption keys for the master SAE (ETSI 014 §5.3).
+
+        Returns just the list of keys for backwards compatibility. Use
+        :meth:`get_enc_keys_container` to access ``key_container_extension``.
+        """
+        container = self.get_enc_keys_container(
+            slave_sae_id,
+            number=number,
+            size=size,
+            method=method,
+            additional_slave_sae_ids=additional_slave_sae_ids,
+            extension_mandatory=extension_mandatory,
+            extension_optional=extension_optional,
+        )
+        return container.keys
+
+    def get_enc_keys_container(
+        self,
+        slave_sae_id: str,
+        *,
+        number: int = 1,
+        size: int = 256,
+        method: str = "GET",
+        additional_slave_sae_ids: Optional[list[str]] = None,
+        extension_mandatory: Optional[list[dict[str, Any]]] = None,
+        extension_optional: Optional[list[dict[str, Any]]] = None,
+    ) -> KeysContainer:
+        """Fetch encryption keys and return the full ETSI 014 §5.3 container.
 
         Parameters
         ----------
         slave_sae_id : str
             The SAE ID of the intended decrypting peer.
         number : int
-            Number of keys to request (KMEs typically cap this at 20).
+            Number of keys to request. KMEs typically cap this at 20.
         size : int
             Key size in bits. Must be a multiple of 8.
         method : str
-            ``"GET"`` (query params) or ``"POST"`` (JSON body). Both are
-            valid per ETSI 014; some KMEs only accept one.
+            ``"GET"`` (query params) or ``"POST"`` (JSON body). Multicast and
+            extensions force POST automatically since GET cannot carry them.
+        additional_slave_sae_ids : list[str], optional
+            Additional slave SAEs that should be able to retrieve the same
+            key (ETSI 014 multicast). Forces POST.
+        extension_mandatory : list[dict], optional
+            Vendor-specific parameters the KME MUST honor (ETSI 014 §5.3.2).
+            Forces POST. The KME rejects the request if it cannot satisfy.
+        extension_optional : list[dict], optional
+            Vendor-specific parameters the KME MAY honor (ETSI 014 §5.3.2).
+            Forces POST. Best-effort.
         """
+        force_post = bool(
+            additional_slave_sae_ids
+            or extension_mandatory
+            or extension_optional
+        )
+        actual_method = "POST" if force_post else method.upper()
+
         url = f"{self.base_url}{_API_PREFIX}/{slave_sae_id}/enc_keys"
-        if method.upper() == "GET":
-            data = self._get_json(url, params={"number": number, "size": size})
-        elif method.upper() == "POST":
-            data = self._post_json(url, json={"number": number, "size": size})
+        if actual_method == "GET":
+            data = self._get_json(
+                url, params={"number": number, "size": size}
+            )
+        elif actual_method == "POST":
+            body: dict[str, Any] = {"number": number, "size": size}
+            if additional_slave_sae_ids:
+                body["additional_slave_SAE_IDs"] = list(additional_slave_sae_ids)
+            if extension_mandatory:
+                body["extension_mandatory"] = list(extension_mandatory)
+            if extension_optional:
+                body["extension_optional"] = list(extension_optional)
+            data = self._post_json(url, json=body)
         else:
-            raise ValueError(f"method must be 'GET' or 'POST', got {method!r}")
-        return self._parse_keys(data)
+            raise ValueError(
+                f"method must be 'GET' or 'POST', got {method!r}"
+            )
+        return self._parse_keys_container(data)
+
+    # ── dec_keys (slave SAE) ───────────────────────────────────────────────
 
     def get_dec_keys(
         self,
         slave_sae_id: str,
         *,
         key_ids: list[str],
+        key_id_extensions: Optional[dict[str, dict[str, Any]]] = None,
+        key_ids_extension: Optional[dict[str, Any]] = None,
     ) -> list[KeyResponse]:
-        """Fetch specific keys by key_ID for the slave SAE (ETSI 014 §5.4)."""
+        """Fetch specific keys by key_ID for the slave SAE (ETSI 014 §5.4).
+
+        Returns just the list of keys. Use :meth:`get_dec_keys_container`
+        to access ``key_container_extension``.
+        """
+        return self.get_dec_keys_container(
+            slave_sae_id,
+            key_ids=key_ids,
+            key_id_extensions=key_id_extensions,
+            key_ids_extension=key_ids_extension,
+        ).keys
+
+    def get_dec_keys_container(
+        self,
+        slave_sae_id: str,
+        *,
+        key_ids: list[str],
+        key_id_extensions: Optional[dict[str, dict[str, Any]]] = None,
+        key_ids_extension: Optional[dict[str, Any]] = None,
+    ) -> KeysContainer:
+        """Fetch keys by key_ID and return the full ETSI 014 §5.4 container.
+
+        Parameters
+        ----------
+        slave_sae_id : str
+            The SAE ID of the decrypting peer (this client).
+        key_ids : list[str]
+            The key identifiers to retrieve, previously obtained by the
+            master SAE via ``get_enc_keys``.
+        key_id_extensions : dict[str, dict], optional
+            Per-key extension data, keyed by key_ID (ETSI 014 §5.4.2
+            ``key_ID_extension``).
+        key_ids_extension : dict, optional
+            Container-level extension data for the request
+            (ETSI 014 §5.4.2 ``key_IDs_extension``).
+        """
         if not key_ids:
             raise ValueError("key_ids must be a non-empty list")
         url = f"{self.base_url}{_API_PREFIX}/{slave_sae_id}/dec_keys"
-        body = {"key_IDs": [{"key_ID": kid} for kid in key_ids]}
+        ext_map = key_id_extensions or {}
+        items: list[dict[str, Any]] = []
+        for kid in key_ids:
+            entry: dict[str, Any] = {"key_ID": kid}
+            if kid in ext_map:
+                entry["key_ID_extension"] = ext_map[kid]
+            items.append(entry)
+        body: dict[str, Any] = {"key_IDs": items}
+        if key_ids_extension:
+            body["key_IDs_extension"] = key_ids_extension
         data = self._post_json(url, json=body)
-        return self._parse_keys(data)
+        return self._parse_keys_container(data)
+
+    # ── Lifecycle ──────────────────────────────────────────────────────────
 
     def close(self) -> None:
         """Close the underlying HTTP session."""
@@ -191,14 +302,26 @@ class ETSI014Client:
             max_key_size=data["max_key_size"],
             min_key_size=data["min_key_size"],
             max_sae_id_count=data["max_SAE_ID_count"],
+            status_extension=data.get("status_extension"),
+        )
+
+    @staticmethod
+    def _parse_keys_container(data: dict) -> KeysContainer:
+        keys = [
+            KeyResponse(
+                key_id=item["key_ID"],
+                key=base64.b64decode(item["key"]),
+                key_id_extension=item.get("key_ID_extension"),
+                key_extension=item.get("key_extension"),
+            )
+            for item in data.get("keys", [])
+        ]
+        return KeysContainer(
+            keys=keys,
+            key_container_extension=data.get("key_container_extension"),
         )
 
     @staticmethod
     def _parse_keys(data: dict) -> list[KeyResponse]:
-        return [
-            KeyResponse(
-                key_id=item["key_ID"],
-                key=base64.b64decode(item["key"]),
-            )
-            for item in data.get("keys", [])
-        ]
+        """Backwards-compatible helper retained from v0.1."""
+        return ETSI014Client._parse_keys_container(data).keys

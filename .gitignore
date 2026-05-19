@@ -31,3 +31,8 @@ htmlcov/
 # OS
 .DS_Store
 Thumbs.db
+
+# Sphinx
+docs/_build/
+docs/_static/
+docs/_templates/
