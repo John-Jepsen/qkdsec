@@ -1,0 +1,73 @@
+[build-system]
+requires = ["setuptools>=61", "setuptools-scm>=8"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "qkdsec"
+version = "0.1.0"
+description = "A developer toolkit for Quantum Key Distribution: numerical security proofs, BB84 simulation, and ETSI GS QKD 014 client"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+authors = [
+    { name = "John Jepsen", email = "jjepsen15@protonmail.com" },
+]
+keywords = ["qkd", "quantum", "cryptography", "bb84", "etsi", "security"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Security :: Cryptography",
+    "Topic :: Scientific/Engineering :: Physics",
+]
+dependencies = [
+    "requests>=2.28",
+]
+
+[project.optional-dependencies]
+proofs = [
+    "cvxpy>=1.5",
+    "numpy>=1.24",
+    "scipy>=1.10",
+]
+proofs-mosek = ["mosek>=10"]
+proofs-diff = ["cvxpylayers>=0.1.6", "torch>=2"]
+sim = [
+    "qiskit>=2.0",
+    "qiskit-aer>=0.17",
+]
+all = [
+    "cvxpy>=1.5",
+    "numpy>=1.24",
+    "scipy>=1.10",
+    "qiskit>=2.0",
+    "qiskit-aer>=0.17",
+]
+test = [
+    "pytest>=7",
+    "responses>=0.24",
+]
+dev = [
+    "pytest>=7",
+    "responses>=0.24",
+    "build>=1.0",
+    "twine>=5.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/John-Jepsen/qkdsec"
+Repository = "https://github.com/John-Jepsen/qkdsec"
+Issues = "https://github.com/John-Jepsen/qkdsec/issues"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["qkdsec*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
