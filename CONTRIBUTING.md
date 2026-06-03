@@ -7,20 +7,12 @@ welcome — bug reports, doc fixes, new tests, and feature work.
 
 ## Where this repository lives
 
-The canonical home for external contributors is
-[github.com/John-Jepsen/qkdsec](https://github.com/John-Jepsen/qkdsec). That is
-where you should:
-
-- File issues
-- Open pull requests
-- Watch CI results
-
-The package is also developed inside the larger
+This repository — [github.com/John-Jepsen/qkdsec](https://github.com/John-Jepsen/qkdsec) —
+is the single source of truth for the `qkdsec` package. Issues, pull requests,
+CI, and releases all live here. It is also consumed as a git submodule from the
 [`qkd-avantheir`](https://github.com/John-Jepsen/qkd-avantheir) research
-monorepo. Internal development may happen there first and is mirrored to the
-standalone repo via `scripts/sync-to-standalone.sh`. If you are an external
-contributor, you do **not** need to know about the monorepo — work against
-`John-Jepsen/qkdsec` as normal.
+monorepo, but contributors do not need to know or care about that — work
+against this repo directly.
 
 ## Code of Conduct
 

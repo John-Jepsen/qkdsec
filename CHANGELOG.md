@@ -13,9 +13,13 @@ Breaking changes are called out under a **Changed** or **Removed** heading.
 ### Added
 - `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `SECURITY.md`, and GitHub issue / PR
   templates.
-- `scripts/sync-to-standalone.sh` for syncing the in-monorepo copy to the
-  standalone PyPI source repo.
-- Development section in README.
+- Development section in README; README restructured around three audience
+  personas (ops engineers, researchers, educators).
+
+### Changed
+- The `qkd-avantheir` research monorepo now consumes this repository as a git
+  submodule instead of a vendored copy with a sync script. No user-facing
+  change; mentioned for archaeological clarity.
 
 ## [0.2.0] — 2025-05-19
 
