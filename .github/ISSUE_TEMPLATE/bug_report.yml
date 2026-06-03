@@ -1,0 +1,96 @@
+name: Bug report
+description: Report incorrect behavior in qkdsec
+title: "[bug] "
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file a bug. Please fill out the sections
+        below so we can reproduce the issue quickly.
+
+        **Security issues:** do not file them here — see
+        [SECURITY.md](https://github.com/John-Jepsen/qkdsec/blob/main/SECURITY.md).
+
+  - type: dropdown
+    id: subpackage
+    attributes:
+      label: Affected subpackage
+      multiple: true
+      options:
+        - qkdsec.client (sync ETSI 014)
+        - qkdsec.client.aio (async ETSI 014)
+        - qkdsec.doctor (KME conformance probe)
+        - qkdsec.proofs (key-rate bounds)
+        - qkdsec.sim (BB84 simulator)
+        - CLI (`qkdsec ...`)
+        - Packaging / install
+        - Docs
+        - Other / not sure
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: qkdsec version
+      description: Output of `qkdsec --version` or `pip show qkdsec | grep Version`.
+      placeholder: "0.2.0"
+    validations:
+      required: true
+
+  - type: input
+    id: python
+    attributes:
+      label: Python version
+      placeholder: "3.12.3"
+    validations:
+      required: true
+
+  - type: input
+    id: os
+    attributes:
+      label: Operating system
+      placeholder: "macOS 14.5 / Ubuntu 22.04 / Windows 11"
+    validations:
+      required: true
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: A clear and concise description of the bug.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect to happen?
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Minimal reproduction
+      description: Code, CLI command, or KME interaction that triggers the issue.
+      render: shell
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs or stack trace
+      render: shell
+
+  - type: checkboxes
+    id: terms
+    attributes:
+      label: Checks
+      options:
+        - label: I have read [CONTRIBUTING.md](https://github.com/John-Jepsen/qkdsec/blob/main/CONTRIBUTING.md).
+          required: true
+        - label: I have searched existing issues and this is not a duplicate.
+          required: true

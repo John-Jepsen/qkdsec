@@ -1,0 +1,50 @@
+name: Doctor probe issue
+description: Report a false positive, false negative, or misleading verdict from `qkdsec doctor`
+title: "[doctor] "
+labels: ["doctor", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this template if `qkdsec doctor` reported the wrong thing about a
+        real KME — for example, flagged conformant behavior as a failure, or
+        passed a KME you know is non-conformant.
+
+        Please **do not** include credentials, certs, or keys in the report.
+
+  - type: input
+    id: version
+    attributes:
+      label: qkdsec version
+      placeholder: "0.2.0"
+    validations:
+      required: true
+
+  - type: input
+    id: vendor
+    attributes:
+      label: KME vendor or product (if shareable)
+      placeholder: "e.g., Toshiba LD KME, IDQ Clarion, internal test KME"
+
+  - type: textarea
+    id: report
+    attributes:
+      label: Doctor output
+      description: Output of `qkdsec doctor --output json <kme>`, with sensitive fields redacted.
+      render: json
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected verdict
+      description: Which probe(s) are wrong, and what should they have reported?
+    validations:
+      required: true
+
+  - type: textarea
+    id: clause
+    attributes:
+      label: Relevant ETSI GS QKD 014 v1.1.1 clause
+      description: Section / clause number that justifies the expected behavior.

@@ -1,0 +1,54 @@
+name: Feature request
+description: Suggest a new feature or enhancement
+title: "[feat] "
+labels: ["enhancement", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for suggesting a feature. For larger changes, please open an
+        issue first so we can discuss the design before any code is written.
+
+  - type: dropdown
+    id: subpackage
+    attributes:
+      label: Target subpackage
+      multiple: true
+      options:
+        - qkdsec.client (sync ETSI 014)
+        - qkdsec.client.aio (async ETSI 014)
+        - qkdsec.doctor (KME conformance probe)
+        - qkdsec.proofs (key-rate bounds)
+        - qkdsec.sim (BB84 simulator)
+        - CLI (`qkdsec ...`)
+        - Docs
+        - New subpackage
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem this would solve
+      description: What user-facing problem motivates this feature?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: A rough sketch of the API, CLI flag, or behavior change.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+
+  - type: textarea
+    id: standards
+    attributes:
+      label: Standards or references
+      description: Link to the relevant ETSI/RFC/NIST clause or paper, if applicable.

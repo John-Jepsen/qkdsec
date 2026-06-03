@@ -119,6 +119,30 @@ if result.secure:
     print(result.final_key.hex())
 ```
 
+## Development
+
+Clone, install with all extras + test deps, and run the suite:
+
+```bash
+git clone https://github.com/John-Jepsen/qkdsec.git
+cd qkdsec
+python -m venv .venv
+source .venv/bin/activate
+pip install --upgrade pip
+pip install -e ".[all,test]"
+pytest -v
+```
+
+Build the docs:
+
+```bash
+pip install -e ".[docs]"
+sphinx-build -b html docs docs/_build/html
+```
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for branching, PRs, and release process,
+and [SECURITY.md](SECURITY.md) for vulnerability reporting.
+
 ## Standards
 
 - **ETSI GS QKD 014 v1.1.1** — REST API for key delivery (full coverage)
@@ -135,6 +159,12 @@ Full docs at [qkdsec.readthedocs.io](https://qkdsec.readthedocs.io/) — quickst
 
 - **What this is:** a developer-facing library for the three roles above.
 - **What this is not:** a complete QKD network, a hybrid QKD+PQC system, or a vendor-specific SDK. QKD itself requires quantum hardware (single-photon sources and detectors over an optical channel). This library helps you build *around* that hardware.
+
+## Contributing
+
+Issues and pull requests are welcome on the canonical repo,
+[github.com/John-Jepsen/qkdsec](https://github.com/John-Jepsen/qkdsec). See
+[CONTRIBUTING.md](CONTRIBUTING.md) to get started.
 
 ## License
 
