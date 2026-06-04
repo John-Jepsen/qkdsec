@@ -1,12 +1,12 @@
 # qkdsec
 
-<img width="363" height="307" alt="image" src="https://github.com/user-attachments/assets/58fcdd3d-6838-4f35-9f90-084468c674f0" />
-
 [![PyPI](https://img.shields.io/pypi/v/qkdsec.svg)](https://pypi.org/project/qkdsec/)
 [![Python](https://img.shields.io/pypi/pyversions/qkdsec.svg)](https://pypi.org/project/qkdsec/)
 [![CI](https://github.com/John-Jepsen/qkdsec/actions/workflows/ci.yml/badge.svg)](https://github.com/John-Jepsen/qkdsec/actions/workflows/ci.yml)
 [![Docs](https://readthedocs.org/projects/qkdsec/badge/?version=latest)](https://qkdsec.readthedocs.io/)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+
+<img width="363" height="307" alt="image" src="https://github.com/user-attachments/assets/58fcdd3d-6838-4f35-9f90-084468c674f0" />
 
 **The developer toolkit for Quantum Key Distribution.** Pull keys from any
 ETSI-compliant KME, prove your vendor actually implements the spec, compute
