@@ -10,6 +10,8 @@ Breaking changes are called out under a **Changed** or **Removed** heading.
 
 ## [Unreleased]
 
+## [0.3.0] — 2026-07-02
+
 ### Added
 - `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `SECURITY.md`, and GitHub issue / PR
   templates.
@@ -56,6 +58,7 @@ Breaking changes are called out under a **Changed** or **Removed** heading.
 - GitHub Actions CI matrix (Python 3.10 / 3.11 / 3.12) and PyPI Trusted
   Publishing release workflow.
 
-[Unreleased]: https://github.com/John-Jepsen/qkdsec/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/John-Jepsen/qkdsec/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/John-Jepsen/qkdsec/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/John-Jepsen/qkdsec/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/John-Jepsen/qkdsec/releases/tag/v0.1.0
