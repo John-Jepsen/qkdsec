@@ -1,7 +1,7 @@
 # qkdsec
 
-[![PyPI](https://img.shields.io/pypi/v/qkdsec.svg)](https://pypi.org/project/qkdsec/)
-[![Python](https://img.shields.io/pypi/pyversions/qkdsec.svg)](https://pypi.org/project/qkdsec/)
+[![PyPI](https://img.shields.io/pypi/v/qkdsec)](https://pypi.org/project/qkdsec/)
+[![Python](https://img.shields.io/pypi/pyversions/qkdsec)](https://pypi.org/project/qkdsec/)
 [![CI](https://github.com/John-Jepsen/qkdsec/actions/workflows/ci.yml/badge.svg)](https://github.com/John-Jepsen/qkdsec/actions/workflows/ci.yml)
 [![Docs](https://readthedocs.org/projects/qkdsec/badge/?version=latest)](https://qkdsec.readthedocs.io/)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
