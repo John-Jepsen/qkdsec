@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "qkdsec"
-version = "0.2.0"
+dynamic = ["version"]
 description = "A developer toolkit for Quantum Key Distribution: numerical security proofs, BB84 simulation, and a full ETSI GS QKD 014 client with built-in conformance probe"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -97,6 +97,11 @@ Issues = "https://github.com/John-Jepsen/qkdsec/issues"
 [tool.setuptools.packages.find]
 where = ["src"]
 include = ["qkdsec*"]
+
+# Version is derived from git tags (v0.2.0 -> 0.2.0). Between tags, builds get
+# a dev version like 0.2.1.dev3+g2d48e42 so every commit is uniquely versioned.
+[tool.setuptools_scm]
+version_file = "src/qkdsec/_version.py"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

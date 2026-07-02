@@ -17,6 +17,11 @@ Breaking changes are called out under a **Changed** or **Removed** heading.
   personas (ops engineers, researchers, educators).
 
 ### Changed
+- The package version is now derived from git tags via `setuptools-scm`
+  instead of being hardcoded in `pyproject.toml` and `qkdsec/__init__.py`.
+  Tagged releases build as the tag version (`v0.2.0` → `0.2.0`); untagged
+  commits build as dev versions (e.g., `0.2.1.dev3+g2d48e42`). Cutting a
+  release is now just tagging: `git tag v0.x.y && git push --tags`.
 - The `qkd-avantheir` research monorepo now consumes this repository as a git
   submodule instead of a vendored copy with a sync script. No user-facing
   change; mentioned for archaeological clarity.
