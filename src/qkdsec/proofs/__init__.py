@@ -27,17 +27,17 @@ from .protocols import BB84, Protocol
 from .sdp import solve_key_rate_sdp
 
 __all__ = [
-    "key_rate",
-    "KeyRateResult",
-    "Protocol",
     "BB84",
     "Channel",
-    "DepolarizingChannel",
-    "LossChannel",
+    "DecoyBounds",
     "DecoyChannel",
+    "DepolarizingChannel",
+    "KeyRateResult",
+    "LossChannel",
+    "Protocol",
+    "key_rate",
+    "qber_statistical_inflation",
     "solve_key_rate_sdp",
     "tomamichel_correction",
-    "qber_statistical_inflation",
     "two_decoy_bounds",
-    "DecoyBounds",
 ]

@@ -163,7 +163,7 @@ class QiskitQuantumChannel:
             job = backend.run(qc, shots=1)
             counts = job.result().get_counts()
 
-            bitstring = list(counts.keys())[0].zfill(batch_size)
+            bitstring = next(iter(counts)).zfill(batch_size)
             bits = [int(b) for b in reversed(bitstring)]
             all_results.extend(bits[:batch_size])
 

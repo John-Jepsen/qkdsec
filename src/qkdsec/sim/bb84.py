@@ -32,7 +32,6 @@ import random
 from dataclasses import dataclass
 from typing import Optional
 
-
 # Length of the public hash tag Alice and Bob compare to verify their
 # corrected keys match; counted against the entropy budget.
 _VERIFICATION_TAG_BITS = 128
@@ -154,7 +153,7 @@ class BB84Protocol:
         key_alice = [sifted_alice[i] for i in range(n_sifted) if i not in sample_idx]
         key_bob = [sifted_bob[i] for i in range(n_sifted) if i not in sample_idx]
 
-        errors = sum(a != b for a, b in zip(sample_alice, sample_bob))
+        errors = sum(a != b for a, b in zip(sample_alice, sample_bob, strict=True))
         qber = errors / sample_size
 
         sift_ratio = n_sifted / n_bits
@@ -221,6 +220,7 @@ class BB84Protocol:
                 a != b for a, b in zip(
                     alice[start : start + block_size],
                     bob[start : start + block_size],
+                    strict=True,
                 )
             )
             rates.append(errs / block_size)
@@ -230,7 +230,7 @@ class BB84Protocol:
     def _max_error_burst(alice: list[int], bob: list[int]) -> int:
         max_run = 0
         current = 0
-        for a, b in zip(alice, bob):
+        for a, b in zip(alice, bob, strict=True):
             if a != b:
                 current += 1
                 max_run = max(max_run, current)

@@ -203,7 +203,7 @@ def status(
         s = client.status(slave_sae_id)
     except KMEError as e:
         err_console.print(f"[red]Error:[/] {e}")
-        raise typer.Exit(1)
+        raise typer.Exit(1) from None
     finally:
         client.close()
 
@@ -239,7 +239,7 @@ def keys_get(
         )
     except KMEError as e:
         err_console.print(f"[red]Error:[/] {e}")
-        raise typer.Exit(1)
+        raise typer.Exit(1) from None
     finally:
         client.close()
 
@@ -263,7 +263,7 @@ def keys_retrieve(
         keys = client.get_dec_keys(slave_sae_id, key_ids=key_ids)
     except KMEError as e:
         err_console.print(f"[red]Error:[/] {e}")
-        raise typer.Exit(1)
+        raise typer.Exit(1) from None
     finally:
         client.close()
 

@@ -299,7 +299,7 @@ def test_probe_latency_collects_samples():
 
 @responses.activate
 def test_run_all_happy_path_is_conformant():
-    # Status used many times (status_fields probe, reachability, latency × 5)
+    # Status used many times (status_fields probe, reachability, latency x 5)
     for _ in range(20):
         responses.add(
             responses.GET, f"{BASE}/api/v1/keys/{SAE}/status",

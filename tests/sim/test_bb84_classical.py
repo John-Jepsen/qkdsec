@@ -77,14 +77,15 @@ def test_reconcile_corrects_scattered_errors():
 def test_sub_permille_error_rate_not_quantized_to_zero():
     # Regression: probabilities were once quantized to 1/1000 granularity,
     # silently turning error_rate < 0.001 into exactly 0.
-    from qkdsec.sim._classical import ClassicalQuantumChannel
     import random
+
+    from qkdsec.sim._classical import ClassicalQuantumChannel
 
     chan = ClassicalQuantumChannel(error_rate=5e-4, rng=random.Random(99))
     alice_bits = [0] * 40_000
     alice_bases = [0] * 40_000
     bob_bits, bob_bases = chan.transmit(alice_bits, alice_bases)
     flips = sum(
-        b != 0 for b, bb in zip(bob_bits, bob_bases) if bb == 0
+        b != 0 for b, bb in zip(bob_bits, bob_bases, strict=True) if bb == 0
     )
     assert flips > 0
