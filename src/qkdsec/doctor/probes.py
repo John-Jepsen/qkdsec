@@ -6,13 +6,15 @@ the full battery and report on every category, even when the KME is partially
 broken.
 """
 
+import math
 import time
-from dataclasses import asdict, dataclass, field
-from enum import Enum
 from typing import Any, Optional
 
 from ..client import ETSI014Client
-from ..client.errors import KMEError, KMEHTTPError, KMENotFoundError
+from ..client.errors import KMEHTTPError, KMENotFoundError
+from .report import ProbeResult, ProbeStatus, Report
+
+__all__ = ["ProbeResult", "ProbeStatus", "Report", "run_all"]
 
 # ETSI 014 §5.2 — required status fields
 _REQUIRED_STATUS_FIELDS = {
@@ -31,64 +33,6 @@ _REQUIRED_STATUS_FIELDS = {
 
 # ETSI 014 §5.2 — known (required + optional) status fields
 _KNOWN_STATUS_FIELDS = _REQUIRED_STATUS_FIELDS | {"status_extension"}
-
-
-class ProbeStatus(str, Enum):
-    PASS = "pass"
-    WARN = "warn"
-    FAIL = "fail"
-    SKIP = "skip"
-
-
-@dataclass
-class ProbeResult:
-    """Outcome of a single conformance probe."""
-
-    name: str
-    status: ProbeStatus
-    summary: str
-    spec_section: Optional[str] = None
-    severity: str = "info"  # "info", "warn", "critical"
-    latency_ms: Optional[float] = None
-    details: dict[str, Any] = field(default_factory=dict)
-
-    def to_dict(self) -> dict[str, Any]:
-        d = asdict(self)
-        d["status"] = self.status.value
-        return d
-
-
-@dataclass
-class Report:
-    """Aggregate report from a doctor run."""
-
-    base_url: str
-    slave_sae_id: str
-    results: list[ProbeResult] = field(default_factory=list)
-    total_latency_ms: float = 0.0
-
-    @property
-    def counts(self) -> dict[str, int]:
-        c = {s.value: 0 for s in ProbeStatus}
-        for r in self.results:
-            c[r.status.value] += 1
-        return c
-
-    @property
-    def passed(self) -> bool:
-        return all(
-            r.status != ProbeStatus.FAIL for r in self.results
-        )
-
-    def to_dict(self) -> dict[str, Any]:
-        return {
-            "base_url": self.base_url,
-            "slave_sae_id": self.slave_sae_id,
-            "counts": self.counts,
-            "passed": self.passed,
-            "total_latency_ms": self.total_latency_ms,
-            "results": [r.to_dict() for r in self.results],
-        }
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────
@@ -133,8 +77,7 @@ def probe_status_fields(
     client: ETSI014Client, slave_sae_id: str
 ) -> tuple[ProbeResult, Optional[dict]]:
     """Validate that the §5.2 status response includes all required fields."""
-    url = f"{client.base_url}/api/v1/keys/{slave_sae_id}/status"
-    raw, latency, exc = _timed(client._get_json, url)
+    raw, latency, exc = _timed(client.status_raw, slave_sae_id)
     if exc is not None or raw is None:
         return ProbeResult(
             name="status_fields",
@@ -149,12 +92,15 @@ def probe_status_fields(
     missing = _REQUIRED_STATUS_FIELDS - present
     unknown = present - _KNOWN_STATUS_FIELDS
 
+    def _is_int(v: Any) -> bool:
+        # bool is a subclass of int; JSON true/false must not pass as ints.
+        return isinstance(v, int) and not isinstance(v, bool)
+
     type_errors = []
-    if "key_size" in raw and not isinstance(raw["key_size"], int):
-        type_errors.append("key_size is not int")
-    for f in ("stored_key_count", "max_key_count", "max_key_per_request",
-              "max_key_size", "min_key_size", "max_SAE_ID_count"):
-        if f in raw and not isinstance(raw[f], int):
+    for f in ("key_size", "stored_key_count", "max_key_count",
+              "max_key_per_request", "max_key_size", "min_key_size",
+              "max_SAE_ID_count"):
+        if f in raw and not _is_int(raw[f]):
             type_errors.append(f"{f} is not int")
     for f in ("source_KME_ID", "target_KME_ID",
               "master_SAE_ID", "slave_SAE_ID"):
@@ -281,11 +227,28 @@ def probe_enc_keys_caps(
     client: ETSI014Client,
     slave_sae_id: str,
     max_per_request: int,
-    max_size: int,
+    stored_key_count: Optional[int] = None,
 ) -> ProbeResult:
-    """Verify the KME enforces max_key_per_request and max_key_size caps."""
-    # Try to request more than allowed — should fail with HTTP 400.
+    """Verify the KME enforces its max_key_per_request cap.
+
+    Requests ``max_per_request + 1`` keys and expects HTTP 400. If the KME
+    does not enforce the cap, this probe consumes that many keys. When the
+    stored pool is too small to satisfy the over-cap request anyway, the
+    probe is skipped — a 400 from pool exhaustion would be
+    indistinguishable from cap enforcement.
+    """
     over_count = max_per_request + 1
+    if stored_key_count is not None and stored_key_count < over_count:
+        return ProbeResult(
+            name="enc_keys_caps",
+            status=ProbeStatus.SKIP,
+            summary=(
+                f"Skipped: only {stored_key_count} keys stored; a rejection "
+                f"of {over_count} keys would not prove cap enforcement."
+            ),
+            spec_section="§5.3",
+            severity="info",
+        )
     _, latency, exc = _timed(
         client.get_enc_keys, slave_sae_id, number=over_count
     )
@@ -525,9 +488,12 @@ def probe_latency(
             severity="info",
         )
     latencies.sort()
-    p50 = latencies[len(latencies) // 2]
-    p99 = latencies[max(0, int(len(latencies) * 0.99) - 1)]
-    avg = sum(latencies) / len(latencies)
+    n = len(latencies)
+    p50 = latencies[n // 2]
+    # Nearest-rank percentile; with few samples this is simply the max,
+    # never an interior sample masquerading as a tail estimate.
+    p99 = latencies[min(n - 1, math.ceil(0.99 * n) - 1)]
+    avg = sum(latencies) / n
     return ProbeResult(
         name="latency",
         status=ProbeStatus.PASS,
@@ -568,8 +534,9 @@ def run_all(
         The slave SAE ID to probe against.
     consume_keys : bool
         If ``False``, skip probes that consume real keys (enc_keys / dec_keys
-        round-trip / extensions). Default ``True`` — consumes up to 5 keys
-        per run.
+        round-trip / extensions). Default ``True`` — consumes ~5 keys per
+        run, plus up to ``max_key_per_request + 1`` more if the KME fails to
+        enforce its per-request cap (see :func:`probe_enc_keys_caps`).
     latency_samples : int
         Number of status calls to time for the latency probe.
     """
@@ -587,34 +554,23 @@ def run_all(
     sf, raw_status = probe_status_fields(client, slave_sae_id)
     report.results.append(sf)
     max_per_request = (raw_status or {}).get("max_key_per_request", 20)
-    max_size = (raw_status or {}).get("max_key_size", 1024)
+    stored_key_count = (raw_status or {}).get("stored_key_count")
 
     if not consume_keys:
-        report.results.append(ProbeResult(
-            name="enc_keys_get",
-            status=ProbeStatus.SKIP,
-            summary="Skipped (--no-consume).",
-        ))
-        report.results.append(ProbeResult(
-            name="enc_keys_post",
-            status=ProbeStatus.SKIP,
-            summary="Skipped (--no-consume).",
-        ))
-        report.results.append(ProbeResult(
-            name="enc_keys_caps",
-            status=ProbeStatus.SKIP,
-            summary="Skipped (--no-consume).",
-        ))
-        report.results.append(ProbeResult(
-            name="extensions_accepted",
-            status=ProbeStatus.SKIP,
-            summary="Skipped (--no-consume).",
-        ))
-        report.results.append(ProbeResult(
-            name="dec_keys_roundtrip",
-            status=ProbeStatus.SKIP,
-            summary="Skipped (--no-consume).",
-        ))
+        report.results.extend(
+            ProbeResult(
+                name=name,
+                status=ProbeStatus.SKIP,
+                summary="Skipped (--no-consume).",
+            )
+            for name in (
+                "enc_keys_get",
+                "enc_keys_post",
+                "enc_keys_caps",
+                "extensions_accepted",
+                "dec_keys_roundtrip",
+            )
+        )
     else:
         # 3. enc_keys GET
         get_res, _ = probe_enc_keys_get(client, slave_sae_id)
@@ -624,7 +580,10 @@ def run_all(
         report.results.append(post_res)
         # 5. caps enforcement
         report.results.append(
-            probe_enc_keys_caps(client, slave_sae_id, max_per_request, max_size)
+            probe_enc_keys_caps(
+                client, slave_sae_id, max_per_request,
+                stored_key_count=stored_key_count,
+            )
         )
         # 6. extension passthrough
         report.results.append(probe_extensions_accepted(client, slave_sae_id))
