@@ -41,3 +41,50 @@ def test_qber_threshold_aborts_below_eve_level():
     ).run(n_bits=4096)
     assert not result.secure
     assert result.eavesdropper_detected
+
+
+def test_seeded_runs_are_reproducible():
+    r1 = BB84Protocol(error_rate=0.01, backend="classical", seed=1234).run(4096)
+    r2 = BB84Protocol(error_rate=0.01, backend="classical", seed=1234).run(4096)
+    assert r1.final_key == r2.final_key
+    assert r1.final_key != b""
+    assert r1.qber == r2.qber
+    assert r1.leaked_bits == r2.leaked_bits
+
+
+def test_reconciliation_verified_and_leak_accounted():
+    result = BB84Protocol(
+        error_rate=0.02, backend="classical", seed=7
+    ).run(n_bits=4096)
+    assert result.secure
+    assert result.reconciliation_verified
+    # Announced parities plus the verification tag must all be accounted
+    assert result.leaked_bits > result.sifted_bits // 10
+
+
+def test_reconcile_corrects_scattered_errors():
+    proto = BB84Protocol(backend="classical", seed=3)
+    alice = [(i * 7 + 3) % 2 for i in range(1000)]
+    bob = alice[:]
+    for i in (5, 123, 124, 411, 700, 999):  # includes an adjacent pair
+        bob[i] ^= 1
+    corrected, leaked = proto._reconcile(alice, bob)
+    assert corrected == alice
+    # At minimum one parity per block per pass was announced
+    assert leaked >= 1000 // 8
+
+
+def test_sub_permille_error_rate_not_quantized_to_zero():
+    # Regression: probabilities were once quantized to 1/1000 granularity,
+    # silently turning error_rate < 0.001 into exactly 0.
+    from qkdsec.sim._classical import ClassicalQuantumChannel
+    import random
+
+    chan = ClassicalQuantumChannel(error_rate=5e-4, rng=random.Random(99))
+    alice_bits = [0] * 40_000
+    alice_bases = [0] * 40_000
+    bob_bits, bob_bases = chan.transmit(alice_bits, alice_bases)
+    flips = sum(
+        b != 0 for b, bb in zip(bob_bits, bob_bases) if bb == 0
+    )
+    assert flips > 0
