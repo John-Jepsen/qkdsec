@@ -34,8 +34,8 @@ __all__ = [
     "ProbeResult",
     "ProbeStatus",
     "Report",
-    "run_all",
-    "format_text",
-    "format_json",
     "format_html",
+    "format_json",
+    "format_text",
+    "run_all",
 ]

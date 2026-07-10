@@ -64,6 +64,8 @@ async with AsyncETSI014Client("https://kme.example.com", client=http) as kme:
 
 When you pass `client=`, `AsyncETSI014Client` does **not** own the lifecycle. Close it yourself.
 
+Configure TLS (`cert`, `verify`) on the `httpx.AsyncClient` you pass in, as above — combining `client=` with the `client_cert`/`verify` parameters raises `ValueError`, since httpx cannot apply them per-request. `extra_headers` and `timeout` are applied per-request and work fine with an injected client.
+
 ## Concurrency patterns
 
 ### Parallel key fetches

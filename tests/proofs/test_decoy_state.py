@@ -92,6 +92,18 @@ def test_certified_rate_at_distance_realistic(distance_km, eta_d, expected_min_r
     )
 
 
+def test_inconsistent_stats_fail_conservative():
+    # Background errors exceeding all observed errors would drive the raw
+    # e_1 upper bound negative. That must clamp to the pessimistic 0.5,
+    # never to 0 (which would certify zero single-photon errors).
+    b = two_decoy_bounds(
+        mu_signal=0.5, mu_decoy=0.1,
+        gain_signal=0.01, gain_decoy=0.002, gain_vacuum=0.001,
+        qber_decoy=0.0,  # zero observed errors despite dark counts
+    )
+    assert b.e_1_upper == 0.5
+
+
 def test_decoy_aborts_at_excessive_loss():
     eta = 1e-6
     mu, nu = 0.5, 0.1

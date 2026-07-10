@@ -20,19 +20,13 @@ For multicast (one-to-many) delivery, pass ``additional_slave_SAE_IDs=[...]``
 to ``get_enc_keys``; the same key is then retrievable by each listed SAE.
 """
 
-import base64
-from typing import Any, Optional, Union
+from typing import Any, Optional
 
 import requests
 
+from . import _common
+from ._common import CertType, VerifyType
 from ._types import KeyResponse, KeysContainer, StatusResponse
-from .errors import KMEHTTPError, KMENotFoundError
-
-_API_PREFIX = "/api/v1/keys"
-
-
-CertType = Union[str, tuple[str, str], None]
-VerifyType = Union[bool, str]
 
 
 class ETSI014Client:
@@ -57,6 +51,7 @@ class ETSI014Client:
         Additional headers to send on every request.
     session : requests.Session, optional
         Reuse an existing session (useful for connection pooling or testing).
+        A session you pass in is *not* closed by :meth:`close` — you own it.
     """
 
     def __init__(
@@ -74,15 +69,22 @@ class ETSI014Client:
         self.verify = verify
         self.timeout = timeout
         self.extra_headers = dict(extra_headers or {})
+        self._owns_session = session is None
         self._session = session or requests.Session()
 
     # ── Status ─────────────────────────────────────────────────────────────
 
     def status(self, slave_sae_id: str) -> StatusResponse:
         """Fetch KME status for the given slave SAE (ETSI 014 §5.2)."""
-        url = f"{self.base_url}{_API_PREFIX}/{slave_sae_id}/status"
-        data = self._get_json(url)
-        return self._parse_status(data)
+        return _common.parse_status(self.status_raw(slave_sae_id))
+
+    def status_raw(self, slave_sae_id: str) -> dict:
+        """Fetch the §5.2 status response as the raw JSON dict.
+
+        Useful for conformance tooling that needs to inspect exactly which
+        fields the KME returned (see :mod:`qkdsec.doctor`).
+        """
+        return self._get_json(_common.status_url(self.base_url, slave_sae_id))
 
     # ── enc_keys (master SAE) ──────────────────────────────────────────────
 
@@ -147,32 +149,20 @@ class ETSI014Client:
             Vendor-specific parameters the KME MAY honor (ETSI 014 §5.3.2).
             Forces POST. Best-effort.
         """
-        force_post = bool(
-            additional_slave_sae_ids
-            or extension_mandatory
-            or extension_optional
+        actual_method, params, body = _common.build_enc_keys_request(
+            number=number,
+            size=size,
+            method=method,
+            additional_slave_sae_ids=additional_slave_sae_ids,
+            extension_mandatory=extension_mandatory,
+            extension_optional=extension_optional,
         )
-        actual_method = "POST" if force_post else method.upper()
-
-        url = f"{self.base_url}{_API_PREFIX}/{slave_sae_id}/enc_keys"
+        url = _common.enc_keys_url(self.base_url, slave_sae_id)
         if actual_method == "GET":
-            data = self._get_json(
-                url, params={"number": number, "size": size}
-            )
-        elif actual_method == "POST":
-            body: dict[str, Any] = {"number": number, "size": size}
-            if additional_slave_sae_ids:
-                body["additional_slave_SAE_IDs"] = list(additional_slave_sae_ids)
-            if extension_mandatory:
-                body["extension_mandatory"] = list(extension_mandatory)
-            if extension_optional:
-                body["extension_optional"] = list(extension_optional)
-            data = self._post_json(url, json=body)
+            data = self._get_json(url, params=params)
         else:
-            raise ValueError(
-                f"method must be 'GET' or 'POST', got {method!r}"
-            )
-        return self._parse_keys_container(data)
+            data = self._post_json(url, json=body)
+        return _common.parse_keys_container(data)
 
     # ── dec_keys (slave SAE) ───────────────────────────────────────────────
 
@@ -220,27 +210,23 @@ class ETSI014Client:
             Container-level extension data for the request
             (ETSI 014 §5.4.2 ``key_IDs_extension``).
         """
-        if not key_ids:
-            raise ValueError("key_ids must be a non-empty list")
-        url = f"{self.base_url}{_API_PREFIX}/{slave_sae_id}/dec_keys"
-        ext_map = key_id_extensions or {}
-        items: list[dict[str, Any]] = []
-        for kid in key_ids:
-            entry: dict[str, Any] = {"key_ID": kid}
-            if kid in ext_map:
-                entry["key_ID_extension"] = ext_map[kid]
-            items.append(entry)
-        body: dict[str, Any] = {"key_IDs": items}
-        if key_ids_extension:
-            body["key_IDs_extension"] = key_ids_extension
+        body = _common.build_dec_keys_body(
+            key_ids, key_id_extensions, key_ids_extension
+        )
+        url = _common.dec_keys_url(self.base_url, slave_sae_id)
         data = self._post_json(url, json=body)
-        return self._parse_keys_container(data)
+        return _common.parse_keys_container(data)
 
     # ── Lifecycle ──────────────────────────────────────────────────────────
 
     def close(self) -> None:
-        """Close the underlying HTTP session."""
-        self._session.close()
+        """Close the underlying HTTP session (if owned by this instance).
+
+        Sessions passed in via the ``session`` parameter are left open —
+        the caller created them and remains responsible for closing them.
+        """
+        if self._owns_session:
+            self._session.close()
 
     def __enter__(self) -> "ETSI014Client":
         return self
@@ -276,52 +262,18 @@ class ETSI014Client:
     def _handle_response(response: requests.Response) -> dict:
         if response.ok:
             return response.json()
-
         try:
-            message = response.json().get("message", response.text)
+            parsed = response.json()
         except ValueError:
-            message = response.text
+            parsed = None
+        _common.raise_kme_error(response.status_code, parsed, response.text)
 
-        if response.status_code == 404:
-            raise KMENotFoundError(message)
-        raise KMEHTTPError(response.status_code, message)
+    # ── Parser aliases (kept for backwards compatibility) ─────────────────
 
-    # ── Parsers (also usable by an async sibling) ──────────────────────────
-
-    @staticmethod
-    def _parse_status(data: dict) -> StatusResponse:
-        return StatusResponse(
-            source_kme_id=data["source_KME_ID"],
-            target_kme_id=data["target_KME_ID"],
-            master_sae_id=data["master_SAE_ID"],
-            slave_sae_id=data["slave_SAE_ID"],
-            key_size=data["key_size"],
-            stored_key_count=data["stored_key_count"],
-            max_key_count=data["max_key_count"],
-            max_key_per_request=data["max_key_per_request"],
-            max_key_size=data["max_key_size"],
-            min_key_size=data["min_key_size"],
-            max_sae_id_count=data["max_SAE_ID_count"],
-            status_extension=data.get("status_extension"),
-        )
-
-    @staticmethod
-    def _parse_keys_container(data: dict) -> KeysContainer:
-        keys = [
-            KeyResponse(
-                key_id=item["key_ID"],
-                key=base64.b64decode(item["key"]),
-                key_id_extension=item.get("key_ID_extension"),
-                key_extension=item.get("key_extension"),
-            )
-            for item in data.get("keys", [])
-        ]
-        return KeysContainer(
-            keys=keys,
-            key_container_extension=data.get("key_container_extension"),
-        )
+    _parse_status = staticmethod(_common.parse_status)
+    _parse_keys_container = staticmethod(_common.parse_keys_container)
 
     @staticmethod
     def _parse_keys(data: dict) -> list[KeyResponse]:
         """Backwards-compatible helper retained from v0.1."""
-        return ETSI014Client._parse_keys_container(data).keys
+        return _common.parse_keys_container(data).keys

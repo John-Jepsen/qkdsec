@@ -164,7 +164,9 @@ def test_probe_caps_pass_when_enforced():
         responses.GET, f"{BASE}/api/v1/keys/{SAE}/enc_keys",
         json={"message": "too many"}, status=400,
     )
-    r = probe_enc_keys_caps(ETSI014Client(BASE), SAE, max_per_request=20, max_size=1024)
+    r = probe_enc_keys_caps(
+        ETSI014Client(BASE), SAE, max_per_request=20, stored_key_count=42
+    )
     assert r.status == ProbeStatus.PASS
 
 
@@ -174,8 +176,19 @@ def test_probe_caps_warn_when_not_enforced():
         responses.GET, f"{BASE}/api/v1/keys/{SAE}/enc_keys",
         json={"keys": [_key_payload("k-1", b"x" * 32)]}, status=200,
     )
-    r = probe_enc_keys_caps(ETSI014Client(BASE), SAE, max_per_request=20, max_size=1024)
+    r = probe_enc_keys_caps(
+        ETSI014Client(BASE), SAE, max_per_request=20, stored_key_count=42
+    )
     assert r.status == ProbeStatus.WARN
+
+
+def test_probe_caps_skipped_when_pool_too_small():
+    # A 400 could mean pool exhaustion rather than cap enforcement, so the
+    # probe must not claim a verdict.
+    r = probe_enc_keys_caps(
+        ETSI014Client(BASE), SAE, max_per_request=20, stored_key_count=3
+    )
+    assert r.status == ProbeStatus.SKIP
 
 
 # ── extensions ────────────────────────────────────────────────────────────
@@ -286,7 +299,7 @@ def test_probe_latency_collects_samples():
 
 @responses.activate
 def test_run_all_happy_path_is_conformant():
-    # Status used many times (status_fields probe, reachability, latency × 5)
+    # Status used many times (status_fields probe, reachability, latency x 5)
     for _ in range(20):
         responses.add(
             responses.GET, f"{BASE}/api/v1/keys/{SAE}/status",

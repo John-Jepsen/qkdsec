@@ -16,8 +16,25 @@ def _h(p: float) -> float:
 
 
 class BB84(Protocol):
+    """BB84 protocol model for the key-rate SDP.
+
+    Parameters
+    ----------
+    f_ec : float
+        Error-correction inefficiency. Real reconciliation codes leak
+        ``f_ec * h(QBER)`` bits per pulse; the Shannon limit is 1.0, and
+        practical Cascade/LDPC implementations sit around 1.1-1.2. The
+        default 1.16 keeps the certified rate honest for deployments;
+        pass 1.0 to reproduce ideal-reconciliation literature values.
+    """
+
     dim_a = 2
     dim_b = 2
+
+    def __init__(self, f_ec: float = 1.16):
+        if f_ec < 1.0:
+            raise ValueError("f_ec must be >= 1.0 (Shannon limit)")
+        self.f_ec = f_ec
 
     def observables(self) -> dict[str, np.ndarray]:
         return {
@@ -29,4 +46,4 @@ class BB84(Protocol):
         return [_P0, _P1]
 
     def leakage(self, channel: Channel) -> float:
-        return channel.total_yield() * _h(channel.total_qber())
+        return channel.total_yield() * self.f_ec * _h(channel.total_qber())
