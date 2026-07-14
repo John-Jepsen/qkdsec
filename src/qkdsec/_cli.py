@@ -16,6 +16,9 @@ Subcommands::
     qkdsec keys retrieve <base_url> <slave_sae_id> <key_id>...
         [--cert ...] [--key ...] [--ca-cert ...]
 
+    qkdsec mock serve [--host HOST] [--port PORT] [--backend BACKEND]
+        [--error-rate RATE]
+
     qkdsec version
 """
 
@@ -48,6 +51,12 @@ keys_app = typer.Typer(
     no_args_is_help=True,
 )
 app.add_typer(keys_app, name="keys")
+
+mock_app = typer.Typer(
+    help="Mock ETSI GS QKD 014 KME server.",
+    no_args_is_help=True,
+)
+app.add_typer(mock_app, name="mock")
 
 console = Console()
 err_console = Console(stderr=True)
@@ -148,8 +157,6 @@ def doctor(
         output.write_text(rendered)
         err_console.print(f"[dim]Report written to {output}[/]")
     else:
-        # For text format we already have terminal control codes; print raw.
-        # For json/html, write plainly via sys.stdout.
         if fmt == "text":
             sys.stdout.write(rendered)
             if not rendered.endswith("\n"):
@@ -273,6 +280,51 @@ def keys_retrieve(
     else:
         for k in keys:
             console.print(f"  [cyan]{k.key_id}[/]  {k.key.hex()}  ({k.size_bits}b)")
+
+
+# ── mock ──────────────────────────────────────────────────────────────────
+
+
+@mock_app.command("serve", help="Start a mock ETSI GS QKD 014 KME server.")
+def mock_serve(
+    host: str = typer.Option(
+        "127.0.0.1", "--host", help="Host to bind to."),
+    port: int = typer.Option(
+        5000, "--port", "-p", help="Port to listen on."),
+    backend: str = typer.Option(
+        "classical", "--backend",
+        help="Key source backend: 'classical' (default) or 'qiskit'.",
+    ),
+    error_rate: float = typer.Option(
+        0.01, "--error-rate",
+        help="Simulated channel error rate (0.0–0.11).",
+    ),
+) -> None:
+    try:
+        from .mock._pool import KeyPool
+        from .mock._server import create_app
+    except ImportError:
+        err_console.print(
+            "[red]Mock server requires Flask.[/] "
+            "Install with: [bold]pip install qkdsec[mock][/bold]"
+        )
+        raise typer.Exit(1)
+
+    console.print(f"[bold]Mock KME[/] starting on [cyan]http://{host}:{port}[/]")
+    console.print(f"  Backend    : {backend}")
+    console.print(f"  Error rate : {error_rate}")
+    console.print(f"  Key source : BB84Protocol")
+    console.print()
+    console.print("  Test with:")
+    console.print(
+        f"    qkdsec doctor http://{host}:{port} "
+        f"--slave-sae-id sae-bob --insecure"
+    )
+    console.print()
+
+    pool = KeyPool(backend=backend, error_rate=error_rate)
+    flask_app = create_app(pool=pool)
+    flask_app.run(host=host, port=port, debug=False)
 
 
 # ── version ───────────────────────────────────────────────────────────────
