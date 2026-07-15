@@ -15,14 +15,14 @@ def _shor_preskill(q: float) -> float:
 
 
 def test_lossless_matches_depolarizing():
-    result = key_rate(BB84(), LossChannel(qber=0.05, loss_db=0.0))
+    result = key_rate(BB84(f_ec=1.0), LossChannel(qber=0.05, loss_db=0.0))
     assert abs(result.r_lower - _shor_preskill(0.05)) < 0.01
 
 
 @pytest.mark.parametrize("loss_db", [2.0, 10.0, 20.0])
 def test_rate_scales_with_transmission(loss_db):
     q = 0.03
-    result = key_rate(BB84(), LossChannel(qber=q, loss_db=loss_db))
+    result = key_rate(BB84(f_ec=1.0), LossChannel(qber=q, loss_db=loss_db))
     eta = 10.0 ** (-loss_db / 10.0)
     expected = eta * _shor_preskill(q)
     assert result.sdp_status in ("optimal", "optimal_inaccurate")
@@ -40,7 +40,7 @@ def test_rate_vs_distance_1550nm(distance_km, qber):
     detector_loss_db = -10.0 * math.log10(eta_d)
     total_loss_db = channel_loss_db + detector_loss_db
 
-    result = key_rate(BB84(), LossChannel(qber=qber, loss_db=total_loss_db))
+    result = key_rate(BB84(f_ec=1.0), LossChannel(qber=qber, loss_db=total_loss_db))
 
     eta = 10.0 ** (-total_loss_db / 10.0)
     expected = eta * _shor_preskill(qber)

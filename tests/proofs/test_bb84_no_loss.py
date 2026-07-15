@@ -15,7 +15,7 @@ def _shor_preskill(q: float) -> float:
 
 @pytest.mark.parametrize("qber", [0.005, 0.01, 0.03, 0.05, 0.08, 0.10])
 def test_bb84_matches_shor_preskill(qber):
-    result = key_rate(BB84(), DepolarizingChannel(qber=qber))
+    result = key_rate(BB84(f_ec=1.0), DepolarizingChannel(qber=qber))
     expected = _shor_preskill(qber)
     assert result.sdp_status in ("optimal", "optimal_inaccurate")
     assert abs(result.r_lower - expected) < 0.01, (
@@ -24,5 +24,17 @@ def test_bb84_matches_shor_preskill(qber):
 
 
 def test_bb84_aborts_above_threshold():
-    result = key_rate(BB84(), DepolarizingChannel(qber=0.20))
+    result = key_rate(BB84(f_ec=1.0), DepolarizingChannel(qber=0.20))
     assert result.r_lower == 0.0
+
+
+def test_default_f_ec_is_less_optimistic_than_ideal():
+    chan = DepolarizingChannel(qber=0.05)
+    ideal = key_rate(BB84(f_ec=1.0), chan)
+    realistic = key_rate(BB84(), chan)  # default f_ec = 1.16
+    assert realistic.r_lower < ideal.r_lower
+
+
+def test_f_ec_below_shannon_limit_rejected():
+    with pytest.raises(ValueError):
+        BB84(f_ec=0.9)

@@ -13,13 +13,34 @@ def key_rate(
     n_signals: int = 0,
     eps_security: float = 1e-10,
 ) -> KeyRateResult:
+    """Certified key-rate lower bound for a protocol over a channel.
+
+    Parameters
+    ----------
+    protocol : Protocol
+        Protocol model (e.g., :class:`~qkdsec.proofs.BB84`).
+    channel : Channel
+        Channel statistics (e.g., :class:`~qkdsec.proofs.DepolarizingChannel`).
+    solver : str
+        CVXPY solver name. Default CLARABEL.
+    n_signals : int
+        Total signals sent. When > 0, a finite-size penalty (Tomamichel et
+        al.) is subtracted from the asymptotic rate; 0 (default) returns
+        the asymptotic rate.
+    eps_security : float
+        Security parameter for the finite-size correction.
+    """
     result = solve_key_rate_sdp(protocol, channel, solver=solver)
 
     if n_signals > 0 and result.r_lower > 0.0:
         n_detected = int(channel.total_yield() * n_signals)
-        penalty = tomamichel_correction(n_detected, eps_security)
-        result.r_lower = max(
-            0.0, result.r_lower - channel.total_yield() * penalty
-        )
+        if n_detected <= 0:
+            # No detections — nothing certifiable at finite size.
+            result.r_lower = 0.0
+        else:
+            penalty = tomamichel_correction(n_detected, eps_security)
+            result.r_lower = max(
+                0.0, result.r_lower - channel.total_yield() * penalty
+            )
 
     return result

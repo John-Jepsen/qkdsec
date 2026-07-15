@@ -9,6 +9,15 @@ Each subpackage may require optional dependencies. See README.md for install
 options (e.g., ``pip install qkdsec[proofs]``).
 """
 
-__version__ = "0.2.0"
+try:
+    # Written by setuptools-scm at build/install time; derived from git tags.
+    from qkdsec._version import __version__
+except ImportError:
+    try:
+        from importlib.metadata import version as _dist_version
+
+        __version__ = _dist_version("qkdsec")
+    except Exception:
+        __version__ = "0.0.0+unknown"
 
 __all__ = ["__version__"]

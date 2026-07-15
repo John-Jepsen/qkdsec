@@ -22,8 +22,10 @@ Subcommands::
     qkdsec version
 """
 
+import dataclasses
 import json
 import sys
+from enum import Enum
 from pathlib import Path
 from typing import Optional
 
@@ -60,6 +62,32 @@ app.add_typer(mock_app, name="mock")
 
 console = Console()
 err_console = Console(stderr=True)
+
+
+class OutputFormat(str, Enum):
+    text = "text"
+    json = "json"
+    html = "html"
+
+
+def _print_keys(keys, as_json: bool) -> None:
+    """Print fetched key material (shared by ``keys get`` / ``keys retrieve``).
+
+    Key bytes are secrets; remind the user they are going to stdout.
+    """
+    err_console.print(
+        "[dim]warning: key material is printed to stdout — avoid shell "
+        "history/logs capturing it.[/]"
+    )
+    if as_json:
+        print(json.dumps(
+            [{"key_id": k.key_id, "key_hex": k.key.hex(), "size_bits": k.size_bits}
+             for k in keys],
+            indent=2,
+        ))
+    else:
+        for k in keys:
+            console.print(f"  [cyan]{k.key_id}[/]  {k.key.hex()}  ({k.size_bits}b)")
 
 
 # ── Shared options ────────────────────────────────────────────────────────
@@ -114,9 +142,9 @@ def doctor(
         None, "--ca-cert", help="Path to CA certificate for TLS verification."),
     insecure: bool = typer.Option(
         False, "--insecure", help="Disable TLS verification (NOT for production)."),
-    fmt: str = typer.Option(
-        "text", "--format", "-f",
-        help="Output format: text, json, html.",
+    fmt: OutputFormat = typer.Option(
+        OutputFormat.text, "--format", "-f",
+        help="Output format.",
     ),
     output: Optional[Path] = typer.Option(
         None, "--output", "-o", help="Write report to file instead of stdout."),
@@ -131,10 +159,6 @@ def doctor(
 ) -> None:
     from .doctor import format_html, format_json, format_text, run_all
 
-    if fmt not in ("text", "json", "html"):
-        err_console.print(f"[red]Invalid format: {fmt}[/]")
-        raise typer.Exit(2)
-
     client = _build_client(base_url, cert, key, ca_cert, insecure, timeout)
     try:
         report = run_all(
@@ -146,9 +170,9 @@ def doctor(
     finally:
         client.close()
 
-    if fmt == "text":
+    if fmt is OutputFormat.text:
         rendered = format_text(report)
-    elif fmt == "json":
+    elif fmt is OutputFormat.json:
         rendered = format_json(report)
     else:
         rendered = format_html(report)
@@ -157,7 +181,9 @@ def doctor(
         output.write_text(rendered)
         err_console.print(f"[dim]Report written to {output}[/]")
     else:
-        if fmt == "text":
+        # For text format we already have terminal control codes; print raw.
+        # For json/html, write plainly via sys.stdout.
+        if fmt is OutputFormat.text:
             sys.stdout.write(rendered)
             if not rendered.endswith("\n"):
                 sys.stdout.write("\n")
@@ -186,24 +212,11 @@ def status(
         s = client.status(slave_sae_id)
     except KMEError as e:
         err_console.print(f"[red]Error:[/] {e}")
-        raise typer.Exit(1)
+        raise typer.Exit(1) from None
     finally:
         client.close()
 
-    payload = {
-        "source_kme_id": s.source_kme_id,
-        "target_kme_id": s.target_kme_id,
-        "master_sae_id": s.master_sae_id,
-        "slave_sae_id": s.slave_sae_id,
-        "key_size": s.key_size,
-        "stored_key_count": s.stored_key_count,
-        "max_key_count": s.max_key_count,
-        "max_key_per_request": s.max_key_per_request,
-        "max_key_size": s.max_key_size,
-        "min_key_size": s.min_key_size,
-        "max_sae_id_count": s.max_sae_id_count,
-        "status_extension": s.status_extension,
-    }
+    payload = dataclasses.asdict(s)
     if as_json:
         print(json.dumps(payload, indent=2))
     else:
@@ -235,19 +248,11 @@ def keys_get(
         )
     except KMEError as e:
         err_console.print(f"[red]Error:[/] {e}")
-        raise typer.Exit(1)
+        raise typer.Exit(1) from None
     finally:
         client.close()
 
-    if as_json:
-        print(json.dumps(
-            [{"key_id": k.key_id, "key_hex": k.key.hex(), "size_bits": k.size_bits}
-             for k in keys],
-            indent=2,
-        ))
-    else:
-        for k in keys:
-            console.print(f"  [cyan]{k.key_id}[/]  {k.key.hex()}  ({k.size_bits}b)")
+    _print_keys(keys, as_json)
 
 
 @keys_app.command("retrieve", help="Slave SAE: retrieve keys by key_ID via dec_keys.")
@@ -267,19 +272,11 @@ def keys_retrieve(
         keys = client.get_dec_keys(slave_sae_id, key_ids=key_ids)
     except KMEError as e:
         err_console.print(f"[red]Error:[/] {e}")
-        raise typer.Exit(1)
+        raise typer.Exit(1) from None
     finally:
         client.close()
 
-    if as_json:
-        print(json.dumps(
-            [{"key_id": k.key_id, "key_hex": k.key.hex(), "size_bits": k.size_bits}
-             for k in keys],
-            indent=2,
-        ))
-    else:
-        for k in keys:
-            console.print(f"  [cyan]{k.key_id}[/]  {k.key.hex()}  ({k.size_bits}b)")
+    _print_keys(keys, as_json)
 
 
 # ── mock ──────────────────────────────────────────────────────────────────

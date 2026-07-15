@@ -8,7 +8,8 @@ measurement.
 Requires the ``sim`` extra: ``pip install qkdsec[sim]``.
 """
 
-import secrets
+import random
+from typing import Optional
 
 try:
     from qiskit import QuantumCircuit
@@ -20,6 +21,10 @@ except ImportError as e:
         "Install with: pip install qkdsec[sim]"
     ) from e
 
+# 256 qubits per circuit is only tractable because every gate used here
+# (X, H, id) is Clifford and depolarizing noise is a Pauli channel, so Aer
+# selects its stabilizer method. Adding any non-Clifford gate would force a
+# statevector simulation, which fails far below this width.
 _BATCH_SIZE = 256
 
 
@@ -36,6 +41,11 @@ class QiskitQuantumChannel:
     eavesdrop_fraction : float
         Fraction of qubits Eve intercepts (0.0 to 1.0). Only used when
         eavesdrop=True. Default 1.0 (full intercept-resend).
+    rng : random.Random, optional
+        Randomness source for basis choices and interception sampling.
+        Defaults to ``random.SystemRandom()`` (OS entropy).
+    seed : int, optional
+        Seed for the Aer simulator, for reproducible measurement outcomes.
     """
 
     def __init__(
@@ -43,6 +53,8 @@ class QiskitQuantumChannel:
         error_rate: float = 0.01,
         eavesdrop: bool = False,
         eavesdrop_fraction: float = 1.0,
+        rng: Optional[random.Random] = None,
+        seed: Optional[int] = None,
     ):
         if not 0.0 <= error_rate <= 0.5:
             raise ValueError("error_rate must be between 0.0 and 0.5")
@@ -51,27 +63,31 @@ class QiskitQuantumChannel:
         self.error_rate = error_rate
         self.eavesdrop = eavesdrop
         self.eavesdrop_fraction = eavesdrop_fraction
+        self._rng = rng if rng is not None else random.SystemRandom()
 
-        self._ideal_backend = AerSimulator()
-        self._noisy_backend = self._build_noisy_backend() if error_rate > 0 else None
+        aer_options = {} if seed is None else {"seed_simulator": seed}
+        self._ideal_backend = AerSimulator(**aer_options)
+        self._noisy_backend = (
+            self._build_noisy_backend(aer_options) if error_rate > 0 else None
+        )
 
-    def _build_noisy_backend(self) -> "AerSimulator":
+    def _build_noisy_backend(self, aer_options: dict) -> "AerSimulator":
         noise_model = NoiseModel()
         p = min(1.0, 3 * self.error_rate / 2)
         noise_model.add_all_qubit_quantum_error(
             depolarizing_error(p, 1), ["id"]
         )
-        return AerSimulator(noise_model=noise_model)
+        return AerSimulator(noise_model=noise_model, **aer_options)
 
     def transmit(
         self, alice_bits: list[int], alice_bases: list[int]
     ) -> tuple[list[int], list[int]]:
         n = len(alice_bits)
-        bob_bases = [secrets.randbelow(2) for _ in range(n)]
+        bob_bases = [self._rng.randrange(2) for _ in range(n)]
 
         if self.eavesdrop:
             if self.eavesdrop_fraction >= 1.0:
-                eve_bases = [secrets.randbelow(2) for _ in range(n)]
+                eve_bases = [self._rng.randrange(2) for _ in range(n)]
                 eve_bits = self._run_circuit(
                     alice_bits, alice_bases, eve_bases, noisy=False
                 )
@@ -80,10 +96,10 @@ class QiskitQuantumChannel:
                 )
             else:
                 intercepted = [
-                    secrets.randbelow(1000) < int(self.eavesdrop_fraction * 1000)
+                    self._rng.random() < self.eavesdrop_fraction
                     for _ in range(n)
                 ]
-                eve_bases = [secrets.randbelow(2) for _ in range(n)]
+                eve_bases = [self._rng.randrange(2) for _ in range(n)]
 
                 eve_bits = self._run_circuit(
                     alice_bits, alice_bases, eve_bases, noisy=False
@@ -147,7 +163,7 @@ class QiskitQuantumChannel:
             job = backend.run(qc, shots=1)
             counts = job.result().get_counts()
 
-            bitstring = list(counts.keys())[0].zfill(batch_size)
+            bitstring = next(iter(counts)).zfill(batch_size)
             bits = [int(b) for b in reversed(bitstring)]
             all_results.extend(bits[:batch_size])
 

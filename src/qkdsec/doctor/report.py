@@ -1,12 +1,70 @@
-"""Formatters for doctor reports — text, JSON, and HTML."""
+"""Doctor report types and formatters (text, JSON, and HTML)."""
 
 import datetime as _dt
 import html
 import json
-from typing import TYPE_CHECKING
+from dataclasses import asdict, dataclass, field
+from enum import Enum
+from typing import Any, Optional
 
-if TYPE_CHECKING:
-    from .probes import ProbeResult, Report
+
+class ProbeStatus(str, Enum):
+    PASS = "pass"
+    WARN = "warn"
+    FAIL = "fail"
+    SKIP = "skip"
+
+
+@dataclass
+class ProbeResult:
+    """Outcome of a single conformance probe."""
+
+    name: str
+    status: ProbeStatus
+    summary: str
+    spec_section: Optional[str] = None
+    severity: str = "info"  # "info", "warn", "critical"
+    latency_ms: Optional[float] = None
+    details: dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> dict[str, Any]:
+        d = asdict(self)
+        d["status"] = self.status.value
+        return d
+
+
+@dataclass
+class Report:
+    """Aggregate report from a doctor run."""
+
+    base_url: str
+    slave_sae_id: str
+    results: list[ProbeResult] = field(default_factory=list)
+    total_latency_ms: float = 0.0
+
+    @property
+    def counts(self) -> dict[str, int]:
+        c = {s.value: 0 for s in ProbeStatus}
+        for r in self.results:
+            c[r.status.value] += 1
+        return c
+
+    @property
+    def passed(self) -> bool:
+        return all(
+            r.status != ProbeStatus.FAIL for r in self.results
+        )
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "base_url": self.base_url,
+            "slave_sae_id": self.slave_sae_id,
+            "counts": self.counts,
+            "passed": self.passed,
+            "total_latency_ms": self.total_latency_ms,
+            "results": [r.to_dict() for r in self.results],
+        }
+
 
 _STATUS_GLYPH = {
     "pass": "PASS",
