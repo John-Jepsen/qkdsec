@@ -49,6 +49,7 @@ class KeyPool:
         self._available_order: deque[str]           = deque()
         self._pending:         dict[str, StoredKey] = {}
         self._lock = threading.Lock()
+        self._refilling = False
         self._proto = BB84Protocol(
             error_rate=error_rate,
             backend=backend,
@@ -81,14 +82,30 @@ class KeyPool:
         )
 
     def _fill_to_target(self) -> None:
-        while len(self._available) < POOL_TARGET:
+        # Key generation is slow (a full BB84 run), so generate outside the
+        # lock and only lock the pool mutations.
+        while True:
+            with self._lock:
+                if len(self._available) >= POOL_TARGET:
+                    return
             k = self._generate()
-            self._available[k.key_id] = k
-            self._available_order.append(k.key_id)
+            with self._lock:
+                self._available[k.key_id] = k
+                self._available_order.append(k.key_id)
+
+    def _refill_worker(self) -> None:
+        try:
+            self._fill_to_target()
+        finally:
+            with self._lock:
+                self._refilling = False
 
     def _maybe_refill(self) -> None:
-        if len(self._available) < POOL_REFILL_TRIGGER:
-            threading.Thread(target=self._fill_to_target, daemon=True).start()
+        with self._lock:
+            if len(self._available) >= POOL_REFILL_TRIGGER or self._refilling:
+                return
+            self._refilling = True
+        threading.Thread(target=self._refill_worker, daemon=True).start()
 
     def get_keys(self, count: int, size_bits: int = DEFAULT_KEY_SIZE) -> list[StoredKey]:
         """

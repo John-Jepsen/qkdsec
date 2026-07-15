@@ -53,6 +53,8 @@ cli = [
 ]
 # The doctor probe runs on the sync client; it needs only the CLI deps.
 doctor = ["qkdsec[cli]"]
+# The mock KME server needs Flask on top of the CLI deps.
+mock = ["flask>=3", "qkdsec[cli]"]
 docs = [
     "sphinx>=7",
     "furo>=2024.5",
@@ -60,7 +62,7 @@ docs = [
     "sphinx-autodoc-typehints>=2",
     "sphinx-copybutton>=0.5",
 ]
-all = ["qkdsec[proofs,sim,async,cli]"]
+all = ["qkdsec[proofs,sim,async,cli,mock]"]
 test = [
     "pytest>=7",
     "pytest-asyncio>=0.23",
