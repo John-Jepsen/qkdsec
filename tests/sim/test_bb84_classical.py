@@ -34,10 +34,13 @@ def test_invalid_backend_raises():
 
 
 def test_qber_threshold_aborts_below_eve_level():
-    # Even without Eve, a high channel error rate should trigger abort
+    # Even without Eve, a high channel error rate should trigger abort.
+    # Seeded: with 10% QBER sampling, an unseeded run at 0.15 lands under
+    # the 0.11 threshold ~3% of the time and flakes.
     result = BB84Protocol(
         error_rate=0.15,
         backend="classical",
+        seed=2,
     ).run(n_bits=4096)
     assert not result.secure
     assert result.eavesdropper_detected
