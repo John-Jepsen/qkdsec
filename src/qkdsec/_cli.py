@@ -293,8 +293,8 @@ def mock_serve(
         help="Key source backend: 'classical' (default) or 'qiskit'.",
     ),
     error_rate: float = typer.Option(
-        0.01, "--error-rate",
-        help="Simulated channel error rate (0.0–0.11).",
+        0.01, "--error-rate", min=0.0, max=0.11,
+        help="Simulated channel error rate (0.0-0.11).",
     ),
 ) -> None:
     try:
@@ -305,12 +305,12 @@ def mock_serve(
             "[red]Mock server requires Flask.[/] "
             "Install with: [bold]pip install qkdsec[mock][/bold]"
         )
-        raise typer.Exit(1)
+        raise typer.Exit(1) from None
 
     console.print(f"[bold]Mock KME[/] starting on [cyan]http://{host}:{port}[/]")
     console.print(f"  Backend    : {backend}")
     console.print(f"  Error rate : {error_rate}")
-    console.print(f"  Key source : BB84Protocol")
+    console.print("  Key source : BB84Protocol")
     console.print()
     console.print("  Test with:")
     console.print(

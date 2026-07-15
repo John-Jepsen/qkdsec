@@ -69,8 +69,8 @@ def create_app(pool: KeyPool | None = None) -> Flask:
     @app.post("/api/v1/keys/<slave_sae_id>/enc_keys")
     def route_enc_keys_post(slave_sae_id: str):
         body   = request.get_json(silent=True) or {}
-        number = min(int(body.get("number", 1)), MAX_KEYS_PER_REQUEST)
-        size   = int(body.get("size", DEFAULT_KEY_SIZE))
+        number = _int_field(body, "number", 1, 1, MAX_KEYS_PER_REQUEST)
+        size   = _int_field(body, "size", DEFAULT_KEY_SIZE, MIN_KEY_SIZE, MAX_KEY_SIZE)
         if size % 8 != 0:
             abort(400, description="size must be a multiple of 8 bits")
         keys = pool.get_keys(number, size)
@@ -91,9 +91,14 @@ def create_app(pool: KeyPool | None = None) -> Flask:
             item["key_ID"] for item in raw_ids
             if isinstance(item, dict) and "key_ID" in item
         ]
+        if not key_ids:
+            abort(400, description="'key_IDs' entries must be objects with a 'key_ID' field")
         found, missing = pool.get_by_ids(key_ids)
-        if not found:
-            abort(404, description="No matching keys found — key may not exist or already retrieved")
+        if missing:
+            abort(404, description=(
+                "Keys not found (may not exist or already retrieved): "
+                + ", ".join(missing)
+            ))
         return jsonify({"keys": [key_to_dict(k) for k in found]})
 
     # ── Error handlers ────────────────────────────────────────────────────
@@ -118,3 +123,16 @@ def _int_param(name: str, default: int, lo: int, hi: int) -> int:
     if not lo <= val <= hi:
         abort(400, description=f"'{name}' must be between {lo} and {hi}")
     return val
+
+
+def _int_field(body: dict, name: str, default: int, lo: int, hi: int) -> int:
+    """Parse and validate an integer field from a JSON body."""
+    raw = body.get(name, default)
+    if isinstance(raw, bool) or not isinstance(raw, int):
+        try:
+            raw = int(raw)
+        except (TypeError, ValueError):
+            abort(400, description=f"'{name}' must be an integer")
+    if not lo <= raw <= hi:
+        abort(400, description=f"'{name}' must be between {lo} and {hi}")
+    return raw

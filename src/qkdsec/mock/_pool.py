@@ -11,10 +11,10 @@ matching real KME one-time-use semantics.
 
 from __future__ import annotations
 
+import base64
 import hashlib
 import threading
 import uuid
-import base64
 from collections import deque
 from dataclasses import dataclass
 
@@ -65,8 +65,13 @@ class KeyPool:
         This matches John's approach in kme_server.py exactly.
         """
         n_raw = max(4096, size_bits * 25)
-        result = self._proto.run(n_bits=n_raw)
-        if not result.secure:
+        # Near the QBER threshold an individual run can abort by chance;
+        # retry a few times before treating the channel as compromised.
+        for _ in range(10):
+            result = self._proto.run(n_bits=n_raw)
+            if result.secure:
+                break
+        else:
             raise RuntimeError("BB84 aborted — QBER exceeded threshold")
 
         needed = size_bits // 8
@@ -136,18 +141,18 @@ class KeyPool:
     def get_by_ids(self, key_ids: list[str]) -> tuple[list[StoredKey], list[str]]:
         """
         Retrieve specific keys by ID for the slave SAE.
-        Found keys are removed from _pending (one-time use).
+
+        All-or-nothing: if any requested ID is unknown, nothing is
+        consumed and the missing IDs are returned. On full success the
+        keys are removed from _pending (one-time use).
         Returns (found, missing).
         """
-        found   = []
-        missing = []
+        unique_ids = list(dict.fromkeys(key_ids))
         with self._lock:
-            for kid in key_ids:
-                if kid in self._pending:
-                    found.append(self._pending.pop(kid))
-                else:
-                    missing.append(kid)
-        return found, missing
+            missing = [kid for kid in unique_ids if kid not in self._pending]
+            if missing:
+                return [], missing
+            return [self._pending.pop(kid) for kid in unique_ids], []
 
     @property
     def available_count(self) -> int:
