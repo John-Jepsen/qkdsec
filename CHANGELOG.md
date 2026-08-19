@@ -23,6 +23,7 @@ Breaking changes are called out under a **Changed** or **Removed** heading.
 - Qiskit backend test coverage (smoke + eavesdrop-detection tests).
 - Ruff lint configuration and CI lint job; coverage reporting in CI; CI now
   tests Python 3.13; the publish workflow runs the test suite before building.
+-  qkdsec mock serve (mentions the ETSI 014 routes and that it passes doctor)
 
 ### Changed
 - **Simulator security semantics.** BB84 error correction is now Cascade-style
